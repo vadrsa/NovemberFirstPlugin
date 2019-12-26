@@ -15,21 +15,25 @@ using System.Reflection;
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
+using System.Net;
+using System.IO.Compression;
 
 namespace NovemberFirstPage
 {
     public class PluginControls : IPluginControl
     {
-        private string probingPath = "";
-        private string pluginPath = @"C:\Uniconta\PluginPath";
+        private string architecture = "";
+        private string cefPath = "";
+        private string cefRarUrl;
 
         public PluginControls()
         {
             if (Environment.Is64BitOperatingSystem)
-                probingPath = "x64";
+                architecture = "x64";
             else
-                probingPath = "x86";
-            
+                architecture = "x86";
+            cefPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "November1Plugin", "cef");
+            cefRarUrl = $"https://ceffiles.blob.core.windows.net/cef/{architecture}.zip";
         }
 
         public string Name
@@ -46,6 +50,19 @@ namespace NovemberFirstPage
 
         public string[] GetDependentAssembliesName()
         {
+            try
+            {
+                using (var client = new WebClient())
+                {
+                    string tempFile = Path.GetTempFileName();
+                    client.DownloadFile(cefRarUrl, tempFile);
+                    ZipFile.ExtractToDirectory(tempFile, cefPath);
+                }
+            }
+            catch(Exception e)
+            {
+
+            }
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
             return null;
         }
@@ -61,7 +78,7 @@ namespace NovemberFirstPage
             if (!Cef.IsInitialized)
             {
                 var settings = new CefSettings();
-                settings.BrowserSubprocessPath = Path.Combine(pluginPath, $"{probingPath}/CefSharp.BrowserSubprocess.exe");
+                settings.BrowserSubprocessPath = Path.Combine(cefPath, $"{architecture}/CefSharp.BrowserSubprocess.exe");
                 Cef.Initialize(settings, performDependencyCheck: false, browserProcessHandler: null);
             }
         }
@@ -78,12 +95,12 @@ namespace NovemberFirstPage
         private Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
             var assyName = new AssemblyName(args.Name);
-            var newPath = Path.Combine(probingPath, assyName.Name);
+            var newPath = Path.Combine(architecture, assyName.Name);
             if (!newPath.EndsWith(".dll"))
             {
                 newPath = newPath + ".dll";
             }
-            string fullPath = Path.Combine(pluginPath, newPath);
+            string fullPath = Path.Combine(cefPath, newPath);
             if (File.Exists(fullPath))
             {
                 var assy = Assembly.LoadFile(fullPath);
